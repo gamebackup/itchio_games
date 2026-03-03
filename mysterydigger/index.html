@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en-us">
+  <head>
+    <meta charset="utf-8">
+    <title>Mystery Digger Definitive Edition Demo</title>
+    <link rel="shortcut icon" href="TemplateData/favicon.ico">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+
+      body {
+        background: #0a0805;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 100vh;
+        overflow: hidden;
+      }
+
+   
+      .bg-particles { position: fixed; inset: 0; pointer-events: none; z-index: 0; }
+      .particle {
+        position: absolute;
+        width: 2px; height: 2px;
+        background: #c9a84c;
+        opacity: 0;
+        animation: fp linear infinite;
+      }
+      @keyframes fp {
+        0%   { opacity: 0; transform: translateY(100vh); }
+        10%  { opacity: 0.5; }
+        90%  { opacity: 0.2; }
+        100% { opacity: 0; transform: translateY(-10vh); }
+      }
+
+      #unity-container { position: relative; z-index: 1; }
+
+      .canvas-wrapper {
+        position: relative;
+      }
+
+      .canvas-inner { position: relative; display: block; }
+
+      #unity-canvas { display: block; }
+
+   
+      #unity-loading-bar {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        background: #0d0900;
+        z-index: 5;
+        gap: 28px;
+      }
+
+      .pixel-pick {
+        font-size: 44px;
+        line-height: 1;
+        animation: pick-bounce 0.45s steps(2) infinite;
+        filter: drop-shadow(0 4px 0 #000);
+        user-select: none;
+        transform: scaleX(-1);
+      }
+      @keyframes pick-bounce {
+         0%   { transform: translateY(0) rotate(0deg) scaleX(-1); }
+  50%  { transform: translateY(-8px) rotate(-15deg) scaleX(-1); }
+  100% { transform: translateY(0) rotate(0deg) scaleX(-1); }
+      }
+
+      .pixel-loading-text {
+        font-family: 'Press Start 2P', monospace;
+        font-size: 11px;
+        color: #f8d000;
+        text-shadow: 2px 2px 0 #000, 0 0 12px rgba(248,208,0,0.4);
+        animation: blink 1.2s steps(1) infinite;
+      }
+      @keyframes blink {
+        0%, 100% { opacity: 1; }
+        50%       { opacity: 0.3; }
+      }
+
+      .pixel-bar-container { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+
+      .pixel-bar-outer {
+        width: 288px;
+        height: 22px;
+        background: #1a1000;
+        padding: 3px;
+        box-shadow:
+          inset 0 0 0 1px #000,
+          0 0 0 2px #c9a84c,
+          0 0 0 4px #000,
+          0 0 0 6px #3a2800;
+        image-rendering: pixelated;
+      }
+
+      #unity-progress-bar-full {
+        height: 100%;
+        width: 0%;
+        background: repeating-linear-gradient(
+          90deg,
+          #f8d000 0px, #f8d000 10px,
+          #e87000 10px, #e87000 14px
+        );
+        image-rendering: pixelated;
+        transition: width 0.15s steps(8);
+        box-shadow: 0 0 10px rgba(248,208,0,0.5);
+        position: relative;
+      }
+      #unity-progress-bar-full::after {
+        content: '';
+        position: absolute;
+        top: 0; left: 0; right: 0;
+        height: 4px;
+        background: rgba(255,255,200,0.25);
+      }
+
+      .pixel-bar-label {
+        font-family: 'Press Start 2P', monospace;
+        font-size: 6px;
+        color: #c9a84c;
+        letter-spacing: 0.12em;
+        text-shadow: 1px 1px 0 #000;
+      }
+
+      
+      #unity-fullscreen-button {
+        position: absolute;
+        bottom: 10px;
+        right: 10px;
+        z-index: 20;
+        width: 30px;
+        height: 30px;
+        cursor: pointer;
+        opacity: 0.65;
+        transition: opacity 0.15s;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect x='1' y='1' width='5' height='2' fill='%23c9a84c'/%3E%3Crect x='1' y='1' width='2' height='5' fill='%23c9a84c'/%3E%3Crect x='10' y='1' width='5' height='2' fill='%23c9a84c'/%3E%3Crect x='13' y='1' width='2' height='5' fill='%23c9a84c'/%3E%3Crect x='1' y='13' width='5' height='2' fill='%23c9a84c'/%3E%3Crect x='1' y='10' width='2' height='5' fill='%23c9a84c'/%3E%3Crect x='10' y='13' width='5' height='2' fill='%23c9a84c'/%3E%3Crect x='13' y='10' width='2' height='5' fill='%23c9a84c'/%3E%3C/svg%3E");
+        background-repeat: no-repeat;
+        background-size: contain;
+        image-rendering: pixelated;
+         display: none;
+      }
+      #unity-fullscreen-button:hover { opacity: 1; }
+
+      #unity-warning {
+        position: absolute;
+        top: 0; left: 50%;
+        transform: translateX(-50%);
+        z-index: 100;
+        font-family: 'Press Start 2P', monospace;
+        font-size: 10px;
+      }
+    </style>
+  </head>
+  <body>
+
+    <div class="bg-particles" id="particles"></div>
+
+    <div id="unity-container">
+      <div class="canvas-wrapper">
+        <div class="canvas-inner">
+
+          <canvas id="unity-canvas" width=800 height=600 tabindex="-1"></canvas>
+
+          <div id="unity-loading-bar">
+            <div class="pixel-pick">&#x26CF;&#xFE0F;</div>
+            <div class="pixel-loading-text">LOADING...</div>
+            <div class="pixel-bar-container">
+              <div class="pixel-bar-outer">
+                <div id="unity-progress-bar-full"></div>
+              </div>
+              <div class="pixel-bar-label">DIGGING THE DEPTHS</div>
+            </div>
+          </div>
+
+          <div id="unity-warning"></div>
+          <div id="unity-fullscreen-button" title="Fullscreen"></div>
+
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const particlesEl = document.getElementById('particles');
+      for (let i = 0; i < 20; i++) {
+        const p = document.createElement('div');
+        p.className = 'particle';
+        p.style.left = Math.random() * 100 + 'vw';
+        p.style.animationDuration = (8 + Math.random() * 12) + 's';
+        p.style.animationDelay = (Math.random() * 15) + 's';
+        const s = (1 + Math.random() * 2) + 'px';
+        p.style.width = p.style.height = s;
+        particlesEl.appendChild(p);
+      }
+
+      var canvas           = document.querySelector("#unity-canvas");
+      var loadingBar       = document.querySelector("#unity-loading-bar");
+      var progressBarFull  = document.querySelector("#unity-progress-bar-full");
+      var fullscreenButton = document.querySelector("#unity-fullscreen-button");
+      var warningBanner    = document.querySelector("#unity-warning");
+
+      function unityShowBanner(msg, type) {
+        function updateVis() {
+          warningBanner.style.display = warningBanner.children.length ? 'block' : 'none';
+        }
+        var div = document.createElement('div');
+        div.innerHTML = msg;
+        warningBanner.appendChild(div);
+        if (type == 'error')        div.style = 'background:#8b1a1a;color:#ffd;padding:8px 12px;';
+        else if (type == 'warning') div.style = 'background:#5a4a0a;color:#ffd;padding:8px 12px;';
+        if (type != 'error') setTimeout(() => { warningBanner.removeChild(div); updateVis(); }, 5000);
+        updateVis();
+      }
+
+      var buildUrl  = "Build";
+       var loaderUrl = buildUrl + "/553cb8e999d8500a613ba4d6d0d23842.loader.js";
+        var config = {
+      dataUrl: buildUrl + "/3362cb6494bb337c64548e368e364dc1.data",
+      frameworkUrl: buildUrl + "/fe7963568664d6b88d9eb8185845eb92.framework.js",
+      codeUrl: buildUrl + "/79a3ccd64800cfe7800ab53e818ad140.wasm",
+      streamingAssetsUrl: "StreamingAssets",
+      companyName: "Gepnito Games",
+      productName: "Mystery Digger Definitive Edition Demo",
+      productVersion: "0.9.6",
+        showBanner:         unityShowBanner,
+        
+      };
+
+      if (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) {
+        var meta = document.createElement('meta');
+        meta.name = 'viewport';
+        meta.content = 'width=device-width,height=device-height,initial-scale=1.0,user-scalable=no,shrink-to-fit=yes';
+        document.head.appendChild(meta);
+        canvas.style.width  = "100%";
+        canvas.style.height = "100%";
+      } else {
+        canvas.style.width  = "800px";
+        canvas.style.height = "450px";
+      }
+
+      canvas.style.background = "url('" + buildUrl + "/da96918cad6fbbf44650663eb3ae1665.jpg') center / cover";
+      loadingBar.style.display = "flex";
+
+      var script  = document.createElement("script");
+      script.src  = loaderUrl;
+      script.onload = () => {
+        createUnityInstance(canvas, config, (progress) => {
+          progressBarFull.style.width = (100 * progress) + "%";
+        }).then((unityInstance) => {
+          loadingBar.style.display = "none";
+          fullscreenButton.style.display = "block";
+          fullscreenButton.onclick = () => unityInstance.SetFullscreen(1);
+        }).catch((message) => alert(message));
+      };
+      document.body.appendChild(script);
+    </script>
+  </body>
+</html>
+<script defer src="https://static.itch.io/htmlgame.js" type="text/javascript"></script>
