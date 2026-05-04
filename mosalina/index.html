@@ -1,19 +1,16 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <!-- CSP MUST be first, before any other resource loads -->
     <meta http-equiv="Content-Security-Policy" content="default-src 'self' blob: 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net; worker-src 'self' blob:;">
 
     <meta charset="UTF-8">
     
-    <!-- FIX 1: Add the missing '>' at the end of the base tag -->
     <base href="https://cdn.jsdelivr.net/gh/gamebackup/itchio_games@main/mosalina/">
 
     <title>Mosa Lina</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no">
     <meta name="generator" content="Construct 3">
 
-    <!-- FIX 2: Use relative paths (they will resolve against the base URL) -->
     <link rel="manifest" href="appmanifest.json">
     <link rel="apple-touch-icon" sizes="128x128" href="icons/icon-128.png">
     <link rel="icon" type="image/png" href="icons/icon-128.png">
@@ -27,8 +24,6 @@
             <p class="notSupportedMessage">JavaScript appears to be disabled. Please enable it to view this content.</p>
         </div>
     </noscript>
-
-    <!-- FIX 3: Use relative paths for scripts (they will resolve against the base URL) -->
     <script src="scripts/supportcheck.js"></script>
     <script src="scripts/offlineclient.js" type="module"></script>
     <script src="scripts/main.js" type="module"></script>
