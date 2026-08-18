@@ -1,0 +1,15 @@
+{
+	"name": "COBB CAN MOVE",
+	"short_name": "COBB",
+	"start_url": ".",
+	"display": "standalone",
+	"background_color": "#000000",
+	"description": "A puzzle game where you help Cobb navigate through dark mazes.",
+	"icons": [
+		{
+			"src": "icons/icon-512.png",
+			"sizes": "512x512",
+			"type": "image/png"
+		}
+	]
+}
