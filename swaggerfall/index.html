@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Swaggerfall</title>
+  <style>
+    /* The page is the fog: anything the grid doesn't cover reads as more dusk. */
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #0e1028;
+    }
+    canvas { display: block; }
+
+    /* Screen filters, toggled from the in-game settings menu by class.
+       Scanlines: a fixed overlay striping every third pixel row. */
+    body.fx-scanlines::after {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 10;
+      background: repeating-linear-gradient(
+        to bottom,
+        rgba(0, 0, 0, 0.22) 0px,
+        rgba(0, 0, 0, 0.22) 1px,
+        transparent 1px,
+        transparent 3px
+      );
+    }
+    /* Bloom: the canvas screen-blended with a blurred copy of itself (the
+       SVG filter below); bright glyphs halo, dark ones barely change.
+       sRGB, not the linearRGB default: the linear round trip is 8-bit and
+       posterizes the dark end of the palette. */
+    body.fx-bloom canvas { filter: url(#bloom); }
+    /* Screen curve: the game's canvas is redrawn barrel-warped onto #crt by
+       the WebGL pass below (crtFrame, called after every frame), and hides
+       under it. What the warp uncovers is the bezel, so the page goes
+       black, and a vignette sits over the lot; the scanlines stay straight
+       on top, as on the glass itself. */
+    #crt { display: none; position: fixed; pointer-events: none; z-index: 5; }
+    body.fx-curve { background: #000; }
+    body.fx-curve canvas:not(#crt) { visibility: hidden; }
+    body.fx-curve #crt { display: block; }
+    body.fx-curve::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 9;
+      background: radial-gradient(ellipse at center, transparent 60%, rgba(0, 0, 0, 0.4) 100%);
+    }
+
+    /* Touch controls: shown on a touch screen (body.touch, set from web.rs),
+       hidden again by a physical keypress. Every control is a key of the
+       game held for as long as the finger stays; the stick is the arrows. */
+    #touch {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 8;
+      pointer-events: none;
+      touch-action: none;
+      user-select: none;
+      -webkit-user-select: none;
+      -webkit-touch-callout: none;
+      font: 15px system-ui, sans-serif;
+    }
+    body.touch #touch { display: block; }
+    #touch button, .stick { pointer-events: auto; touch-action: none; }
+    #touch button {
+      width: 52px;
+      height: 52px;
+      padding: 0;
+      border-radius: 14px;
+      border: 1px solid rgba(235, 220, 170, 0.45);
+      background: rgba(14, 16, 40, 0.55);
+      color: #ebdcaa;
+      font: inherit;
+      font-size: 18px;
+    }
+    #touch button.down { background: rgba(235, 220, 170, 0.4); }
+    /* The pad, laid out like a keyboard's arrows: shown over the walk
+       stick on any screen off the world (body.menu, from web.rs). */
+    #pad {
+      position: absolute;
+      left: max(20px, env(safe-area-inset-left));
+      bottom: calc(50px + env(safe-area-inset-bottom, 0px));
+      display: none;
+      grid-template:
+        ". u ." 52px
+        "l d r" 52px
+        / 52px 52px 52px;
+      gap: 4px;
+    }
+    body.menu #pad { display: grid; }
+    body.menu #walk { display: none; }
+    #acts {
+      position: absolute;
+      right: calc(max(20px, env(safe-area-inset-right)) + 140px);
+      bottom: calc(50px + env(safe-area-inset-bottom, 0px));
+      display: grid;
+      grid-template-columns: 52px 52px;
+      gap: 8px;
+    }
+    #touch #jump { grid-column: 1 / 3; width: auto; }
+    /* A fight (body.fight, from web.rs): E is the press, C the counter,
+       and there is nothing to walk, look at, run from or jump over. */
+    #touch #counter { display: none; }
+    body.fight #touch #counter { display: block; }
+    body.fight #touch #run, body.fight #touch #jump, body.fight #look { display: none; }
+    /* Up off the bottom band, where the fight's choices and feedback sit,
+       and the buttons into the corner the look stick has left. */
+    body.fight #pad, body.fight #acts { bottom: calc(160px + env(safe-area-inset-bottom, 0px)); }
+    body.fight #acts { right: max(20px, env(safe-area-inset-right)); }
+    .stick {
+      position: absolute;
+      bottom: calc(50px + env(safe-area-inset-bottom, 0px));
+      width: 120px;
+      height: 120px;
+      border-radius: 50%;
+      border: 1px solid rgba(235, 220, 170, 0.35);
+      background: rgba(14, 16, 40, 0.4);
+    }
+    #walk { left: max(20px, env(safe-area-inset-left)); }
+    #look { right: max(20px, env(safe-area-inset-right)); }
+    .knob {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: 48px;
+      height: 48px;
+      margin: -24px;
+      border-radius: 50%;
+      background: rgba(235, 220, 170, 0.45);
+    }
+    /* Portrait: no room beside the look stick, so the stick takes the
+       corner and the buttons stack above it (the ring is 120px tall over
+       a 50px margin). Last, so it wins over the rules above. */
+    @media (orientation: portrait) {
+      #acts {
+        right: max(20px, env(safe-area-inset-right));
+        bottom: calc(186px + env(safe-area-inset-bottom, 0px));
+      }
+    }
+  </style>
+<link rel="modulepreload" href="./swaggerfall-web-5bfe18cbc0ac0dac.js" crossorigin="anonymous" integrity="sha384-LoBUH3wUbyJboFCzDd76BJgBte5RshHvizR+2tLaWR4mF+RX0rsJpNMxUOAS64kX"><link rel="preload" href="./swaggerfall-web-5bfe18cbc0ac0dac_bg.wasm" crossorigin="anonymous" integrity="sha384-MjtdlK8/Pjz9AHU7uB4rShoScyfuL0bVWTnoNZcbb5GAHTeR6CStmLH5dICDHAB1" as="fetch" type="application/wasm"></head>
+<body>
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <filter id="bloom" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="2.5" result="glow" />
+      <feBlend in="SourceGraphic" in2="glow" mode="screen" />
+    </filter>
+  </svg>
+  <script>
+    // A gamepad press wakes the game, but it is no gesture to the browser:
+    // an AudioContext made then starts suspended and stays so. Remember
+    // every context and resume the suspended ones on the next real
+    // gesture (a key or a click).
+    (() => {
+      const made = [];
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      if (!Ctx) return;
+      const Wrapped = function (...args) {
+        const ctx = new Ctx(...args);
+        made.push(ctx);
+        return ctx;
+      };
+      Wrapped.prototype = Ctx.prototype;
+      window.AudioContext = Wrapped;
+      const resume = () => {
+        for (const ctx of made) {
+          if (ctx.state === "suspended") ctx.resume().catch(() => {});
+        }
+      };
+      window.addEventListener("keydown", resume, true);
+      window.addEventListener("pointerdown", resume, true);
+    })();
+    // Text the game wants on the clipboard (a profile copied as text).
+    // The async clipboard API wants a secure page and a fresh gesture, the
+    // keypress that asked is that gesture; the textarea route is the
+    // fallback for http and older browsers.
+    window.copyText = (text) => {
+      const legacy = () => {
+        const ta = document.createElement("textarea");
+        ta.value = text;
+        ta.style.position = "fixed";
+        ta.style.opacity = "0";
+        document.body.appendChild(ta);
+        ta.select();
+        try { document.execCommand("copy"); } catch (e) {}
+        ta.remove();
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).catch(legacy);
+      } else {
+        legacy();
+      }
+    };
+    // The screen curve. An SVG displacement filter over a WebGL canvas
+    // runs on the cpu (7 fps); this is the same warp on the gpu: the
+    // game's canvas becomes a texture, and every pixel of #crt samples it
+    // outward in proportion to its squared distance from the middle.
+    // Called from web.rs after each frame with the corner pull as a
+    // fraction of the shorter side; 0 puts the pass to sleep.
+    window.crtFrame = (() => {
+      const VS = `#version 300 es
+        void main() {
+          vec2 p = vec2((gl_VertexID << 1) & 2, gl_VertexID & 2);
+          gl_Position = vec4(p * 2.0 - 1.0, 0.0, 1.0);
+        }`;
+      const FS = `#version 300 es
+        precision highp float;
+        uniform sampler2D u_src;
+        uniform vec2 u_size;
+        uniform float u_pull;
+        out vec4 o;
+        void main() {
+          vec2 mid = u_size * 0.5;
+          vec2 n = (gl_FragCoord.xy - mid) / mid;
+          float q = dot(n, n) * 0.5;
+          vec2 uv = (gl_FragCoord.xy + n * q * u_pull * min(u_size.x, u_size.y)) / u_size;
+          if (any(lessThan(uv, vec2(0.0))) || any(greaterThan(uv, vec2(1.0)))) {
+            o = vec4(0.0, 0.0, 0.0, 1.0);
+          } else {
+            o = vec4(texture(u_src, uv).rgb, 1.0);
+          }
+        }`;
+      let out = null, gl = null, uSize, uPull, box = "";
+      function init() {
+        out = document.createElement("canvas");
+        out.id = "crt";
+        document.body.appendChild(out);
+        gl = out.getContext("webgl2", { antialias: false, alpha: false, depth: false });
+        if (!gl) return false;
+        const sh = (kind, src) => {
+          const s = gl.createShader(kind);
+          gl.shaderSource(s, src);
+          gl.compileShader(s);
+          return s;
+        };
+        const prog = gl.createProgram();
+        gl.attachShader(prog, sh(gl.VERTEX_SHADER, VS));
+        gl.attachShader(prog, sh(gl.FRAGMENT_SHADER, FS));
+        gl.linkProgram(prog);
+        if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
+          console.error("crt shader:", gl.getProgramInfoLog(prog));
+          return false;
+        }
+        gl.useProgram(prog);
+        uSize = gl.getUniformLocation(prog, "u_size");
+        uPull = gl.getUniformLocation(prog, "u_pull");
+        gl.uniform1i(gl.getUniformLocation(prog, "u_src"), 0);
+        gl.bindTexture(gl.TEXTURE_2D, gl.createTexture());
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+        gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+        return true;
+      }
+      return (pull) => {
+        if (!(pull > 0)) return;
+        if (gl === null && !init()) return;
+        const src = document.querySelector("canvas:not(#crt)");
+        if (!src) return;
+        // Sit exactly over the source, at its pixel size.
+        const r = src.getBoundingClientRect();
+        const now = `${r.left},${r.top},${r.width},${r.height},${src.width},${src.height}`;
+        if (now !== box) {
+          box = now;
+          out.style.left = r.left + "px";
+          out.style.top = r.top + "px";
+          out.style.width = r.width + "px";
+          out.style.height = r.height + "px";
+          out.width = src.width;
+          out.height = src.height;
+          gl.viewport(0, 0, src.width, src.height);
+          gl.uniform2f(uSize, src.width, src.height);
+        }
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, src);
+        gl.uniform1f(uPull, pull);
+        gl.drawArrays(gl.TRIANGLES, 0, 3);
+      };
+    })();
+  </script>
+  <div id="touch" oncontextmenu="return false">
+    <div id="walk" class="stick"><div class="knob"></div></div>
+    <div id="pad">
+      <button data-verb="up" style="grid-area: u">&#9650;</button>
+      <button data-verb="left" style="grid-area: l">&#9664;</button>
+      <button data-verb="down" style="grid-area: d">&#9660;</button>
+      <button data-verb="right" style="grid-area: r">&#9654;</button>
+    </div>
+    <div id="acts">
+      <button data-verb="menu">tab</button>
+      <button data-verb="back">esc</button>
+      <button data-verb="run" id="run">run</button>
+      <button data-verb="act">E</button>
+      <button data-verb="counter" id="counter">C</button>
+      <button data-verb="jump" id="jump">jump</button>
+    </div>
+    <div id="look" class="stick"><div class="knob"></div></div>
+  </div>
+  
+<script type="module">
+import init, * as bindings from './swaggerfall-web-5bfe18cbc0ac0dac.js';
+const wasm = await init({ module_or_path: './swaggerfall-web-5bfe18cbc0ac0dac_bg.wasm' });
+
+
+window.wasmBindings = bindings;
+
+
+dispatchEvent(new CustomEvent("TrunkApplicationStarted", {detail: {wasm}}));
+
+</script>
+
+  <!-- The music beds, copied beside the wasm rather than baked into it.
+       In the browser they play through <audio> elements (see audio::Bed),
+       which decode off the main thread and stream the file, so the wasm
+       carries none of the 45 MB. The names must match the `Mp3` consts in
+       crates/client/src/audio.rs. The short effect clips stay embedded —
+       they are small, and rodio mixes them. -->
+  
+  
+  
+  
+  
+  
+  
+  
+</body>
+</html>
+<script defer src="https://static.itch.io/htmlgame.js" type="text/javascript"></script>
