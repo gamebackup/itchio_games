@@ -1,119 +1,222 @@
 <!DOCTYPE html>
 <html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <meta http-equiv="pragma" content="no-cache" />
 
-    <!-- Custom PreHead code is injected here -->
-    
+    <title>Created with GameMaker Studio 2</title>
 
-    <head>
-        <meta http-equiv="X-UA-Compatible" content="IE=edge" />
-        <meta name="apple-mobile-web-app-capable" content="yes" />
-        <meta name ="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0" />
-        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-        <meta charset="utf-8"/>
+    <style>
+        html, body {
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            border: 0;
+            overflow: hidden;
+            background: #000;
+            overscroll-behavior: none;
+            touch-action: none;
+            -webkit-user-select: none;
+            user-select: none;
+        }
 
-        <!-- Builtin injector for disabling cache -->
-        <meta http-equiv="pragma" content="no-cache"/>
+        @supports (height: 100dvh) {
+            html, body { height: 100dvh; }
+        }
 
-        <!-- Set the title bar of the page -->
-        <title>Created with GameMaker Studio 2</title>
+        div.gm4html5_div_class {
+            position: fixed;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0;
+            padding: 0;
+            border: 0;
+            overflow: hidden;
+            background: #000;
+        }
 
-        <!-- Custom PreStyle code is injected here -->
-        
+        canvas {
+            display: block;
+            margin: 0;
+            padding: 0;
+            border: 0;
+            background: #000;
+            image-rendering: optimizeSpeed;
+            -webkit-interpolation-mode: nearest-neighbor;
+            -ms-touch-action: none;
+            touch-action: none;
+        }
 
-        <!-- Set the background colour of the document -->
-        <style>
-            body {
-                background: #0;
-                color: #cccccc;
-                margin: 0px;
-                padding: 0px;
-                border: 0px;
+        canvas.pixelated {
+            image-rendering: pixelated;
+            image-rendering: crisp-edges;
+        }
+
+        div.gm4html5_login {
+            padding: 20px;
+            position: absolute;
+            border: solid 2px #000000;
+            background-color: #404040;
+            color: #00ff00;
+            border-radius: 15px;
+            box-shadow: #101010 20px 20px 40px;
+        }
+        div.gm4html5_cancel_button { float: right; }
+        div.gm4html5_login_button { float: left; }
+        div.gm4html5_login_header { text-align: center; }
+    </style>
+</head>
+
+<body>
+    <div class="gm4html5_div_class" id="gm4html5_div_id">
+        <canvas id="canvas" width="960" height="540">
+            <p>Your browser doesn't support HTML5 canvas.</p>
+        </canvas>
+    </div>
+
+    <!-- ============================================================
+         PRE-BOOT: create / unlock an AudioContext before GameMaker
+         starts. Browsers block audio until a user gesture, so we
+         create the context suspended and resume it on first input.
+         ============================================================ -->
+    <script>
+    (function () {
+        // Keep a reference to our own pre-created context. If GameMaker
+        // later creates its own, we'll resume whichever is live.
+        var ownCtx = null;
+
+        // Try to create a context right away (it will start "suspended")
+        try {
+            var Ctx = window.AudioContext || window.webkitAudioContext;
+            if (Ctx) {
+                ownCtx = new Ctx();
+                // Expose it under the names GameMaker might look for,
+                // so the runner reuses it instead of making a new one.
+                if (!window.g_WebAudioContext) window.g_WebAudioContext = ownCtx;
+                if (!window.WebAudioContext)   window.WebAudioContext   = ownCtx;
+            }
+        } catch (e) {
+            console.warn("[audio-unlock] Could not pre-create AudioContext:", e);
+        }
+
+        var unlocked = false;
+
+        function tryResume(ctx) {
+            if (!ctx) return;
+            try {
+                if (ctx.state === "suspended") {
+                    var p = ctx.resume();
+                    if (p && p.catch) p.catch(function () {});
+                }
+            } catch (e) { /* ignore */ }
+        }
+
+        function unlockAudio() {
+            if (unlocked) return;
+
+            // Resume every plausible reference. Whichever GameMaker
+            // actually uses will be in here.
+            tryResume(ownCtx);
+            tryResume(window.g_WebAudioContext);
+            tryResume(window.WebAudioContext);
+            if (window.g_pAudioContext) tryResume(window.g_pAudioContext);
+
+            // Report state once so you can see in the console whether
+            // the unlock actually worked.
+            var ref = window.g_WebAudioContext || window.WebAudioContext || ownCtx;
+            if (ref) {
+                console.log("[audio-unlock] context state after gesture:", ref.state);
+            } else {
+                console.warn("[audio-unlock] no AudioContext reference found yet");
             }
 
-            canvas {
-                image-rendering: optimizeSpeed;
-                -webkit-interpolation-mode: nearest-neighbor;
-                -ms-touch-action: none;
-                touch-action: none;
-                margin: 0px;
-                padding: 0px;
-                border: 0px;
+            // Mark unlocked once the context is actually running.
+            var check = window.g_WebAudioContext || window.WebAudioContext || ownCtx;
+            if (check && check.state === "running") {
+                unlocked = true;
+                window.removeEventListener("pointerdown", unlockAudio);
+                window.removeEventListener("keydown", unlockAudio);
+                window.removeEventListener("touchstart", unlockAudio);
             }
-            :-webkit-full-screen #canvas {
-                width: 100%;
-                height: 100%;
+        }
+
+        window.addEventListener("pointerdown", unlockAudio, { passive: true });
+        window.addEventListener("keydown",     unlockAudio, { passive: true });
+        window.addEventListener("touchstart",  unlockAudio, { passive: true });
+    })();
+    </script>
+
+    <!-- ============================================================
+         FIT-TO-SCREEN: keep the canvas sized to the window.
+         ============================================================ -->
+    <script>
+    (function () {
+        var BASE_W = 960;
+        var BASE_H = 540;
+        var canvas = document.getElementById("canvas");
+
+        // true  = stretch to fill the whole window (may distort)
+        // false = keep 960x540 shape with black bars
+        var STRETCH_TO_FILL = true;
+
+        function resize() {
+            var vw = window.visualViewport ? window.visualViewport.width  : window.innerWidth;
+            var vh = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+
+            var w, h;
+
+            if (STRETCH_TO_FILL) {
+                w = vw;
+                h = vh;
+            } else {
+                var scale = Math.min(vw / BASE_W, vh / BASE_H);
+                w = BASE_W * scale;
+                h = BASE_H * scale;
             }
-            :-webkit-full-screen {
-                width: 100%;
-                height: 100%;
-            }
-            
-            /* Custom Runner Styles */
-            div.gm4html5_div_class {
-                margin: 0px;
-                padding: 0px;
-                border: 0px;
-            }
-            div.gm4html5_login {
-                padding: 20px;
-                position: absolute;
-                border: solid 2px #000000;
-                background-color: #404040;
-                color:#00ff00;
-                border-radius: 15px;
-                box-shadow: #101010 20px 20px 40px;
-            }
-            div.gm4html5_cancel_button {
-                float: right;
-            }
-            div.gm4html5_login_button {
-                float: left;
-            }
-            div.gm4html5_login_header {
-                text-align: center;
-            }
-            /* END - Custom Runner Styles */
-            
-        </style>
 
-        <!-- Custom PostStyle code is injected here -->
-        
+            canvas.style.setProperty("width",  Math.floor(w) + "px", "important");
+            canvas.style.setProperty("height", Math.floor(h) + "px", "important");
+        }
 
-        <!-- Builtin injector for injecting flurry analytics code -->
-        
-    </head>
+        window.addEventListener("resize", resize);
+        window.addEventListener("orientationchange", function () {
+            setTimeout(resize, 250);
+        });
+        if (window.visualViewport) {
+            window.visualViewport.addEventListener("resize", resize);
+        }
 
-    <!-- Custom PostHead code is injected here -->
-    
+        resize();
+    })();
+    </script>
 
-    <!-- Custom PreBody code is injected here -->
-    
+    <!-- ============================================================
+         GAME CODE — must load before we call GameMaker_Init.
+         ============================================================ -->
+    <script type="text/javascript" src="html5game/GenericFighterMaybe.js?cachebust=71215398"></script>
 
-    <body>
-        <div class="gm4html5_div_class" id="gm4html5_div_id">
-            
-            <!-- Builtin injector for splash screen -->
-            
-
-            <!-- Create the canvas element the game draws to -->
-            <canvas id="canvas" width="960" height="540" >
-                <p>Your browser doesn't support HTML5 canvas.</p>
-            </canvas>
-        </div>
-
-        <!-- Run the game code -->
-        <script type="text/javascript" src="html5game/GenericFighterMaybe.js?cachebust=71215398"></script>
-
-        <!-- Builtin injector for injecting runner path -->
-        
-
-        <script>window.onload = GameMaker_Init;</script>
-
-        <!-- Builtin injector for injecting google analytics code -->
-        
-
-    </body>
-
-    <!-- Custom PostBody code is injected here -->
-    
+    <!-- ============================================================
+         BOOT: give the audio context one tick to settle, then init.
+         This is a one-frame delay, not a real wait — it just makes
+         sure the pre-created context has been registered.
+         ============================================================ -->
+    <script>
+    window.onload = function () {
+        // One rAF keeps the page responsive and gives the context
+        // a chance to be picked up by the runner.
+        requestAnimationFrame(function () {
+            GameMaker_Init();
+        });
+    };
+    </script>
+</body>
 </html>
