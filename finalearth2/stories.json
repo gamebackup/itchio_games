@@ -19,13 +19,6 @@
         "requirements": ["thisIsNotFinished"]
     },
     {
-        "name": "Hacking Alien Tech",
-        "description": "You discover some alien influences on your newest outpost.",
-        "link": "hackersandaliens",
-        "requirements": ["multipleWorlds"],
-        "unlockedWithAll": true
-    },
-    {
         "name": "Free Play - Mega World",
         "description": "Build the city of your dreams on this huge world!",
         "link": "FreePlayMegaWorld",
